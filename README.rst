@@ -24,6 +24,10 @@ backtrader
    :scale: 100%
    :target: https://pypi.python.org/pypi/backtrader/
 
+**IB_Async**
+  [2025-06-01] Due to IBPY no longer being supported, this fork aims to maintain
+  the IBKR store, broker and data through the community maintained IB_Async package.
+
 **Yahoo API Note**:
 
   [2018-11-16] After some testing it would seem that data downloads can be

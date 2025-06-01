@@ -38,7 +38,6 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         ("clientId", None),  # None generates a random clientid 1 -> 2^16
         ("notifyall", False),
         ("_debug", False),
-        ("refreshrate", 0.05),  # IB_Async now usses ib.sleep to refresh its values
         ("reconnect", 3),  # -1 forever, 0 No, > 0 number of retries
         ("timeout", 3.0),  # timeout between reconnections
         ("timeoffset", True),  # Use offset to server for timestamps if needed
@@ -91,17 +90,13 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         self.dontreconnect = False  # for non-recoverable connect errors
         self.broker = None  # broker instance
 
-        self.acc_cash = AutoDict()  # current total cash per account
-        self.acc_value = AutoDict()  # current total value per account
-        self.acc_upds = AutoDict()  # current account valueinfos per account
-
-        self.positions = collections.defaultdict(Position)  # actual positions
-
         # Create connection object
         self.conn = IB().connect(host=self.p.host, port=self.p.port, clientId=self.p.clientId)
         # Register them to async
         for event in self.events:
             getattr(self.conn, event).connect(getattr(self, event))
+            if self.p.notifyall or self.p._debug:
+                getattr(self.conn, event).connect(self.watcher)
 
         # Use the provided clientId or a random one
         if self.p.clientId is None:
@@ -136,11 +131,11 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         if self.p._debug:
             print(*args)
 
-    def watcher(self, msg):
+    def watcher(self, *args):
         # will be registered to see all messages if debug is requested
-        self.logmsg(str(msg))
+        self.logmsg(*args)
         if self.p.notifyall:
-            self.notifs.put((msg, tuple(msg.values()), dict(msg.items())))
+            self.notifs.put(args)  
 
     def get_notifications(self):
         """Return the pending "store" notifications"""
@@ -156,19 +151,7 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
 
         return notifs
 
-    def reqAccountUpdates(self, subscribe=True, account=None):
-        """Proxy to reqAccountUpdates
-
-        If ``account`` is ``None``, wait for the ``managedAccounts`` message to
-        set the account codes
-        """
-        if account is None:
-            self._event_managed_accounts.wait()
-            account = self.managed_accounts[0]
-
-        self.conn.reqAccountUpdates(subscribe, bytes(account))
-
-    def get_acc_value(self, tag):
+    def getAccountValues(self, tag, currency="BASE"):
         """
         my own implementation
 
@@ -177,17 +160,19 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         latest_vals = [val for val in self.conn.accountValues() if val.tag == tag]
         if not latest_vals:
             return None
+        elif len(latest_vals) == 1:
+            return latest_vals[0]
 
         for val in latest_vals:
-            if val.currency == "USD":
+            if val.currency == currency:
                 return float(val.value)
 
-    def getposition(self, dataname, clone=False):
+    def getposition(self, contract, clone=False):
         """New implementation with async"""
 
         position = None
         for pos in self.conn.positions():
-            if dataname == pos.contract.symbol:
+            if contract.conId == pos.contract.conId:
                 position = Position(pos.position, pos.avgCost)
 
         if clone:
@@ -300,17 +285,9 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         """
         Called when an account value has changed.
         """
-        try:
-            value = float(accval.value)
-        except ValueError:
-            value = accval.value
-        self.acc_upds[accval.account][accval.tag][accval.currency] = value
-
-        if accval.tag == "NetLiquidation":
-            # NetLiquidationByCurrency and currency == 'BASE' is the same
-            self.acc_value[accval.account] = value
-        elif accval.tag == "TotalCashBalance" and accval.currency == "BASE":
-            self.acc_cash[accval.account] = value
+        # should no longer be needed due to moving away from event driven
+        # Refer to inital commit for implementation
+        pass
 
     def accountSummaryEvent(self, value):
         """

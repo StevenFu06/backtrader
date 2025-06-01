@@ -199,10 +199,13 @@ contract = Forex("USDCAD")
 # cerebro.run()
 # print(store.getposition("USD"))
 
+import time
 
 ib = IB()
 ib.connect(host, port, clientId)
-bars = ib.reqRealTimeBars(contract, barSize=5, whatToShow="MIDPOINT", useRTH=True)
-for i in range(10):
-    print(bars)
-    ib.sleep(2.5)
+acc_vals = ib.accountValues()
+latest_vals = [val for val in acc_vals if val.tag == "TotalCashBalance"]
+print(latest_vals)
+for val in latest_vals:
+    if val.currency == "USD":
+        print(val.value)
