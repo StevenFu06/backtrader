@@ -1,7 +1,7 @@
 import backtrader as bt
 from ib_async import IB, Stock, MarketOrder, LimitOrder, Forex, StopOrder, Future
 from ibastore import IBAStore
-from ibabroker import IBBroker
+from ibabroker import IBABroker
 import datetime
 
 
@@ -29,8 +29,8 @@ class IBData(bt.feeds.DataBase):
         # either contract from IBKR or manually defined
         ("tradecontract", None),
         ("ib", None),
-        ("whatToShow", "MIDPOINT"),
-        ("useRTH", True),
+        ("whatToShow", "TRADES"),
+        ("useRTH", False),
         ("num_hist_bars", None),
         ("timeframe", bt.TimeFrame.Minutes),
         ("compression", 15),
@@ -171,7 +171,7 @@ class RandomStrategy(bt.Strategy):
         """
         print(self.data.close[0])
         print(self.broker.getvalue())
-        self.buy(data=self.data, size=10)
+        # self.buy(data=self.data, size=10)
         print("we done")
 
     def notify_trade(self, trade):
@@ -190,22 +190,23 @@ class RandomStrategy(bt.Strategy):
 # contract = Future(symbol="GC", lastTradeDateOrContractMonth="202506", exchange="COMEX", currency="USD")
 contract = Forex("USDCAD")
 
-# store = IBAStore(host=host, port=port, clientId=clientId, refreshrate=0.05)
+# store = IBAStore(host=host, port=port, clientId=clientId)
 # cerebro = bt.Cerebro()
-# data = IBData(ib=store.conn, dataname="CL", tradecontract=contract, compression=5, timeframe=bt.TimeFrame.Seconds)
+# data = IBData(ib=store.conn, dataname="GC", tradecontract=contract, compression=10, timeframe=bt.TimeFrame.Seconds)
 # cerebro.broker = store.getbroker()
 # cerebro.addstrategy(RandomStrategy)
 # cerebro.adddata(data)
 # cerebro.run()
-# print(store.getposition("USD"))
-
-import time
 
 ib = IB()
 ib.connect(host, port, clientId)
-acc_vals = ib.accountValues()
-latest_vals = [val for val in acc_vals if val.tag == "TotalCashBalance"]
-print(latest_vals)
-for val in latest_vals:
-    if val.currency == "USD":
-        print(val.value)
+ticker = ib.reqRealTimeBars(contract, barSize=5, whatToShow="MIDPOINT", useRTH=False)
+ib.sleep(2.5)
+while True:
+    try:
+        print(ticker[-1])
+        ticker.clear()
+    except IndexError:
+        print("index error")
+        print([])
+    ib.sleep(2.5)

@@ -63,7 +63,7 @@ bytes = bstr  # py2/3 need for ibpy
 #         return '\n'.join(txt)
 
 
-class IBOrder(OrderBase, ib_async.order.Order):
+class IBAOrder(OrderBase, ib_async.order.Order):
     """Subclasses the IBPy order to provide the minimum extra functionality
     needed to be compatible with the internally defined orders
 
@@ -91,7 +91,7 @@ class IBOrder(OrderBase, ib_async.order.Order):
     def __str__(self):
         """Get the printout from the base class and add some ib.Order specific
         fields"""
-        basetxt = super(IBOrder, self).__str__()
+        basetxt = super(IBAOrder, self).__str__()
         tojoin = [basetxt]
         tojoin.append("Ref: {}".format(self.ref))
         tojoin.append("orderId: {}".format(self.m_orderId))
@@ -125,7 +125,7 @@ class IBOrder(OrderBase, ib_async.order.Order):
 
         self.ordtype = self.Buy if action == "BUY" else self.Sell
 
-        super(IBOrder, self).__init__()
+        super(IBAOrder, self).__init__()
         ib_async.order.Order.__init__(self)  # Invoke 2nd base class
 
         # Now fill in the specific IB parameters
@@ -203,7 +203,7 @@ class IBOrder(OrderBase, ib_async.order.Order):
             setattr(self, (not hasattr(self, k)) * "m_" + k, kwargs[k])
 
 
-class IBCommInfo(CommInfoBase):
+class IBACommInfo(CommInfoBase):
     """
     Commissions are calculated by ib, but the trades calculations in the
     ```Strategy`` rely on the order carrying a CommInfo object attached for the
@@ -227,15 +227,15 @@ class IBCommInfo(CommInfoBase):
         return abs(size) * price
 
 
-class MetaIBBroker(BrokerBase.__class__):
+class MetaIBABroker(BrokerBase.__class__):
     def __init__(cls, name, bases, dct):
         """Class has already been created ... register"""
         # Initialize the class
-        super(MetaIBBroker, cls).__init__(name, bases, dct)
+        super(MetaIBABroker, cls).__init__(name, bases, dct)
         IBAStore.BrokerCls = cls
 
 
-class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
+class IBABroker(with_metaclass(MetaIBABroker, BrokerBase)):
     """Broker implementation for Interactive Brokers.
 
     This class maps the orders/positions from Interactive Brokers to the
@@ -265,14 +265,14 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
     )
 
     def __init__(self, **kwargs):
-        super(IBBroker, self).__init__()
+        super(IBABroker, self).__init__()
 
         self.ib = IBAStore(**kwargs)
+        self.do_refresh = False
 
         self.startingcash = self.cash = 0.0
         self.startingvalue = self.value = 0.0
 
-        self._lock_orders = threading.Lock()  # control access
         self.orderbyid = dict()  # orders by order id
         self.executions = dict()  # notified executions
         self.ordstatus = collections.defaultdict(dict)
@@ -280,10 +280,12 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
         self.tonotify = collections.deque()  # hold oids to be notified
 
     def start(self):
-        super(IBBroker, self).start()
-        # I dont think this is actually necessary now that I think about it.
-        # Futher testing is needed especially with real time data.
-        # self.ib.start(broker=self)
+        super(IBABroker, self).start()
+        self.ib.start(broker=self)
+
+        if not self.ib.refreshing:
+            self.do_refresh = True
+            self.ib.refreshing = True
 
         if self.ib.connected():
             self.startingcash = self.cash = self.ib.getAccountValues("TotalCashBalance")
@@ -293,8 +295,13 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
             self.startingvalue = self.value = 0.0
 
     def stop(self):
-        super(IBBroker, self).stop()
+        super(IBABroker, self).stop()
         self.ib.stop()
+
+    def next(self):
+        self.notifs.put(None)  # mark notificatino boundary
+        if self.do_refresh:  # refresh ib_async
+            self.ib.conn.sleep(self.ib.p.refreshrate)  
 
     def getcash(self):
         self.cash = self.ib.getAccountValues("TotalCashBalance", self.p.currency)
@@ -354,13 +361,13 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
             "FOP",
         )
 
-        return IBCommInfo(mult=mult, stocklike=stocklike)
+        return IBACommInfo(mult=mult, stocklike=stocklike)
 
     def _makeorder(
         self, action, owner, data, size, price=None, plimit=None, exectype=None, valid=None, tradeid=0, **kwargs
     ):
         oid = self.ib.nextOrderId()
-        order = IBOrder(
+        order = IBAOrder(
             action,
             owner=owner,
             data=data,
@@ -400,10 +407,6 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
             pass
 
         return None
-
-    def next(self):
-        self.notifs.put(None)  # mark notificatino boundary
-        self.ib.conn.sleep(self.ib.p.refreshrate)  # refresh ib_async
 
     # Order statuses in msg
     (SUBMITTED, FILLED, CANCELLED, INACTIVE, PENDINGSUBMIT, PENDINGCANCEL, PRESUBMITTED) = (

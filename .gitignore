@@ -69,3 +69,6 @@ samples2/
 datas/*.py
 
 .idea/
+backtrader/brokers/ibbroker.py
+.gitignore
+backtrader.code-workspace

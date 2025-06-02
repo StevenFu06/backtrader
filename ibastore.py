@@ -1,9 +1,10 @@
 import collections
 from copy import copy
 import random
+from datetime import datetime
 
-from ib_async import IB
-from backtrader import Position
+from ib_async import IB, Contract
+from backtrader import Position, TimeFrame
 from backtrader.metabase import MetaParams
 from backtrader.utils.py3 import with_metaclass, queue
 from backtrader.utils import AutoDict
@@ -38,6 +39,7 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         ("clientId", None),  # None generates a random clientid 1 -> 2^16
         ("notifyall", False),
         ("_debug", False),
+        ("refreshrate", 0.02),  # Refresh rate of ib_async in the form of ib.sleep
         ("reconnect", 3),  # -1 forever, 0 No, > 0 number of retries
         ("timeout", 3.0),  # timeout between reconnections
         ("timeoffset", True),  # Use offset to server for timestamps if needed
@@ -88,7 +90,13 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
 
         self.notifs = queue.Queue()  # store notifications for cerebro
         self.dontreconnect = False  # for non-recoverable connect errors
+        # First instance that will call ib.sleep() will set this to true to prevent stacking
+        self.refreshing = False
+
         self.broker = None  # broker instance
+        self.datas = list()  # datas that have registered over start
+        self._env = None  # reference to cerebro for general notifications
+        self.iscash = dict()
 
         # Create connection object
         self.conn = IB().connect(host=self.p.host, port=self.p.port, clientId=self.p.clientId)
@@ -105,20 +113,13 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
             self.clientId = self.p.clientId
 
     def start(self, data=None, broker=None):
+        self.reconnect(fromstart=True)  # reconnect should be an invariant
+        if data is not None:
+            self._env = data._env
+            self.datas.append(data)
+
         if broker is not None:
             self.broker = broker
-
-    def connected(self):
-        # The isConnected method is available through __getattr__ indirections
-        # and may not be present, which indicates that no connection has been
-        # made because the subattribute sender has not yet been created, hence
-        # the check for the AttributeError exception
-        try:
-            return self.conn.isConnected()
-        except AttributeError:
-            pass
-
-        return False  # non-connected (including non-initialized)
 
     def stop(self):
         try:
@@ -135,8 +136,84 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         # will be registered to see all messages if debug is requested
         self.logmsg(*args)
         if self.p.notifyall:
-            self.notifs.put(args)  
+            self.notifs.put(args)
 
+
+    def connected(self):
+        # The isConnected method is available through __getattr__ indirections
+        # and may not be present, which indicates that no connection has been
+        # made because the subattribute sender has not yet been created, hence
+        # the check for the AttributeError exception
+        try:
+            return self.conn.isConnected()
+        except AttributeError:
+            pass
+
+        return False  # non-connected (including non-initialized)
+    
+    def reconnect(self, fromstart=False, resub=False):
+        # This method must be an invariant in that it can be called several
+        # times from the same source and must be consistent. An exampler would
+        # be 5 datas which are being received simultaneously and all request a
+        # reconnect
+
+        # Policy:
+        #  - if dontreconnect has been set, no option to connect is possible
+        #  - check connection and use the absence of isConnected as signal of
+        #    first ever connection (add 1 to retries too)
+        #  - Calculate the retries (forever or not)
+        #  - Try to connct
+        #  - If achieved and fromstart is false, the datas will be
+        #    re-kickstarted to recreate the subscription
+        firstconnect = False
+        try:
+            if self.conn.isConnected():
+                if resub:
+                    self.startdatas()
+                return True  # nothing to do
+        except AttributeError:
+            # Not connected, several __getattr__ indirections to
+            # self.conn.sender.client.isConnected
+            firstconnect = True
+
+        if self.dontreconnect:
+            return False
+
+        # This is only invoked from the main thread by datas 
+        retries = self.p.reconnect
+        if retries >= 0:
+            retries += firstconnect
+
+        while retries < 0 or retries:
+            if not firstconnect:
+                # Sleep with ib.sleep to allow for background connection
+                self.conn.sleep(self.p.timeout)
+
+            firstconnect = False
+
+            if self.conn.connect():
+                if not fromstart or resub:
+                    self.startdatas()
+                return True  # connection successful
+
+            if retries > 0:
+                retries -= 1
+
+        self.dontreconnect = True
+        return False  # connection/reconnection failed
+    
+    def startdatas(self):
+        for data in self.datas:
+            data.reqdata()
+        # Force an update
+        self.conn.sleep(self.p.refreshrate)
+
+    def stopdatas(self):
+        for data in self.datas:
+            data.canceldata()
+        # Force an update
+        self.conn.sleep(self.p.refreshrate)
+    
     def get_notifications(self):
         """Return the pending "store" notifications"""
         # The background thread could keep on adding notifications. The None
@@ -161,7 +238,7 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         if not latest_vals:
             return None
         elif len(latest_vals) == 1:
-            return latest_vals[0]
+            return float(latest_vals[0].value)
 
         for val in latest_vals:
             if val.currency == currency:
@@ -181,7 +258,9 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
 
     def nextOrderId(self):
         """Mimic old nextValidId + itertools.count combo"""
-        return self.conn.client.getReqId()
+        # Dont actually increment it because then reqID will be incremented AGAIN when
+        # getReqId is called by IB(). It will be out of sync.
+        return self.conn.client._reqIdSeq + 1
 
     def cancelOrder(self, order):
         """Proxy to cancelOrder"""
@@ -190,6 +269,121 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
     def placeOrder(self, contract, order):
         """Proxy to placeOrder"""
         self.conn.placeOrder(contract, order)
+
+    def timeoffset(self):
+        """Simplified version using async reqCurrentTime"""
+        return self.conn.reqCurrentTime() - datetime.now()
+
+    def makecontract(self, symbol, sectype, exch, curr, expiry="", strike=0.0, right="", mult=1):
+        """returns a contract from the parameters without check"""
+
+        contract = Contract()
+        contract.symbol = bytes(symbol)
+        contract.secType = bytes(sectype)
+        contract.exchange = bytes(exch)
+        if curr:
+            contract.currency = bytes(curr)
+        if sectype in ["FUT", "OPT", "FOP"]:
+            contract.expiry = bytes(expiry)
+        if sectype in ["OPT", "FOP"]:
+            contract.strike = strike
+            contract.right = bytes(right)
+        if mult:
+            contract.multiplier = bytes(mult)
+        return contract
+
+    def getContractDetails(self, contract, maxcount=None):
+        """Get contract details without old queue and threading system"""
+
+        cds = self.conn.reqContractDetails(contract)
+        if not cds or (maxcount and len(cds) > maxcount):
+            err = "Ambiguous contract: none/multiple answers received"
+            self.notifs.put((err, cds, {}))
+            return None
+        return cds
+
+    def reqMktData(self, contract, what=None):
+        """Creates a MarketData subscription
+
+        Params:
+          - contract: a ib_async.Contract intance
+
+        Returns:
+          - a Queue the client can wait on to receive a RTVolume instance
+        """
+        # get a ticker/queue for identification/data delivery
+        ticks = "233"  # request RTVOLUME tick delivered over tickString
+        ticker = self.conn.reqMktData(contract, genericTickList=ticks, snapshot=False)
+
+        if contract.secType in ["CASH", "CFD"]:
+            self.iscash[contract.conId] = True
+            ticks = ""  # cash markets do not get RTVOLUME
+            if what == "ASK":
+                self.iscash[contract.conId] = 2
+
+        return ticker
+
+    def cancelMktData(self, contract):
+        """Cancels an existing MarketData subscription"""
+
+        self.conn.cancelMktData(contract)
+
+    def reqRealTimeBars(self, contract, what="TRADES", useRTH=False):
+        """Creates a request for (5 seconds) Real Time Bars"""
+
+        ticker = self.conn.reqRealTimeBars(contract, barsize=5, whatToShow=what, useRTH=useRTH)
+        return ticker
+    
+    def cancelRealTimeBars(self, ticker):
+        '''Cancels an existing MarketData subscription
+        
+        Args:
+            The thing that realtimeBars returns. IB_Async just calls bars.reqID to cancel
+        '''
+        self.conn.cancelRealTimeBars(ticker)
+
+
+    def reqHistoricalData(self, contract, enddate, duration, barsize, what=None, useRTH=False, tz="", sessionend=None):
+        """Proxy to reqHistorical Data"""
+
+        # get a ticker/queue for identification/data delivery
+        ticker = self.conn.reqHistoricalData(
+            contract=contract,
+            enddate=enddate.strftime("%Y%m%d %H:%M:%S") + " GMT",
+            duration=duration,
+            barsize=barsize,
+            whatToShow=what,
+            useRTH=useRTH,
+            formatDate=2,
+        )
+
+        if contract.secType in ["CASH", "CFD"]:
+            self.iscash[contract.conId] = True
+            if not what:
+                what = "BID"  # TRADES doesn't work
+            elif what == "ASK":
+                self.iscash[contract.conId] = 2
+        else:
+            what = what or "TRADES"
+
+        # split barsize "x time", look in sizes for (tf, comp) get tf
+        tframe = self._sizes[barsize.split()[1]][0]
+        self.histfmt[contract.conId] = tframe >= TimeFrame.Days
+        self.histsend[contract.conId] = sessionend
+        self.histtz[contract.conId] = tz
+
+        return ticker
+    
+    def cancelQueue(self, q, sendnone=False):
+        '''Cancels a Queue for data delivery'''
+        # pop ts (tickers) and with the result qs (queues)
+        tickerId = self.ts.pop(q, None)
+        self.qs.pop(tickerId, None)
+
+        self.iscash.pop(tickerId, None)
+
+        if sendnone:
+            q.put(None)
 
     def connectedEvent(self):
         """
