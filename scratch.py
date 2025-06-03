@@ -1,5 +1,5 @@
 import backtrader as bt
-from ib_async import IB, Stock, MarketOrder, LimitOrder, Forex, StopOrder, Future
+from ib_async import IB, Stock, MarketOrder, Forex, StopOrder, Future
 from ibastore import IBAStore
 from ibabroker import IBABroker
 import datetime
@@ -187,8 +187,8 @@ class RandomStrategy(bt.Strategy):
 
 
 # contract = Stock(symbol="AMD", currency="USD", exchange="SMART")
-# contract = Future(symbol="GC", lastTradeDateOrContractMonth="202506", exchange="COMEX", currency="USD")
-contract = Forex("USDCAD")
+contract = Future(symbol="GC", lastTradeDateOrContractMonth="202506", exchange="COMEX", currency="USD")
+# contract = Forex("USD1CAD")
 
 # store = IBAStore(host=host, port=port, clientId=clientId)
 # cerebro = bt.Cerebro()
@@ -201,12 +201,8 @@ contract = Forex("USDCAD")
 ib = IB()
 ib.connect(host, port, clientId)
 ticker = ib.reqRealTimeBars(contract, barSize=5, whatToShow="MIDPOINT", useRTH=False)
-ib.sleep(2.5)
-while True:
-    try:
-        print(ticker[-1])
-        ticker.clear()
-    except IndexError:
-        print("index error")
-        print([])
-    ib.sleep(2.5)
+ib.sleep(5)
+print(ticker)
+ticker = list(ticker)
+ib.sleep(5)
+print(ticker)

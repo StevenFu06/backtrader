@@ -25,6 +25,159 @@ class MetaSingleton(MetaParams):
 
 
 class IBAStore(with_metaclass(MetaSingleton, object)):
+    # The _durations are meant to calculate the needed historical data to
+    # perform backfilling at the start of a connetion or a connection is lost.
+    # Using a timedelta as a key allows to quickly find out which bar size
+    # bar size (values in the tuples int the dict) can be used.
+
+    _durations = dict([
+        # 60 seconds - 1 min
+        ('60 S',
+         ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs',
+          '1 min')),
+
+        # 120 seconds - 2 mins
+        ('120 S',
+         ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs',
+          '1 min', '2 mins')),
+
+        # 180 seconds - 3 mins
+        ('180 S',
+         ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs',
+          '1 min', '2 mins', '3 mins')),
+
+        # 300 seconds - 5 mins
+        ('300 S',
+         ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs',
+          '1 min', '2 mins', '3 mins', '5 mins')),
+
+        # 600 seconds - 10 mins
+        ('600 S',
+         ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs',
+          '1 min', '2 mins', '3 mins', '5 mins', '10 mins')),
+
+        # 900 seconds - 15 mins
+        ('900 S',
+         ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs',
+          '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins')),
+
+        # 1200 seconds - 20 mins
+        ('1200 S',
+         ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs',
+          '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
+          '20 mins')),
+
+        # 1800 seconds - 30 mins
+        ('1800 S',
+         ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs',
+          '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
+          '20 mins', '30 mins')),
+
+        # 3600 seconds - 1 hour
+        ('3600 S',
+         ('5 secs', '10 secs', '15 secs', '30 secs',
+          '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
+          '20 mins', '30 mins',
+          '1 hour')),
+
+        # 7200 seconds - 2 hours
+        ('7200 S',
+         ('5 secs', '10 secs', '15 secs', '30 secs',
+          '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
+          '20 mins', '30 mins',
+          '1 hour', '2 hours')),
+
+        # 10800 seconds - 3 hours
+        ('10800 S',
+         ('10 secs', '15 secs', '30 secs',
+          '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
+          '20 mins', '30 mins',
+          '1 hour', '2 hours', '3 hours')),
+
+        # 14400 seconds - 4 hours
+        ('14400 S',
+         ('15 secs', '30 secs',
+          '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
+          '20 mins', '30 mins',
+          '1 hour', '2 hours', '3 hours', '4 hours')),
+
+        # 28800 seconds - 8 hours
+        ('28800 S',
+         ('30 secs',
+          '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
+          '20 mins', '30 mins',
+          '1 hour', '2 hours', '3 hours', '4 hours', '8 hours')),
+
+        # 1 days
+        ('1 D',
+         ('1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
+          '20 mins', '30 mins',
+          '1 hour', '2 hours', '3 hours', '4 hours', '8 hours',
+          '1 day')),
+
+        # 2 days
+        ('2 D',
+         ('2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
+          '20 mins', '30 mins',
+          '1 hour', '2 hours', '3 hours', '4 hours', '8 hours',
+          '1 day')),
+
+        # 1 weeks
+        ('1 W',
+         ('3 mins', '5 mins', '10 mins', '15 mins',
+          '20 mins', '30 mins',
+          '1 hour', '2 hours', '3 hours', '4 hours', '8 hours',
+          '1 day', '1 W')),
+
+        # 2 weeks
+        ('2 W',
+         ('15 mins', '20 mins', '30 mins',
+          '1 hour', '2 hours', '3 hours', '4 hours', '8 hours',
+          '1 day', '1 W')),
+
+        # 1 months
+        ('1 M',
+         ('30 mins',
+          '1 hour', '2 hours', '3 hours', '4 hours', '8 hours',
+          '1 day', '1 W', '1 M')),
+
+        # 2+ months
+        ('2 M', ('1 day', '1 W', '1 M')),
+        ('3 M', ('1 day', '1 W', '1 M')),
+        ('4 M', ('1 day', '1 W', '1 M')),
+        ('5 M', ('1 day', '1 W', '1 M')),
+        ('6 M', ('1 day', '1 W', '1 M')),
+        ('7 M', ('1 day', '1 W', '1 M')),
+        ('8 M', ('1 day', '1 W', '1 M')),
+        ('9 M', ('1 day', '1 W', '1 M')),
+        ('10 M', ('1 day', '1 W', '1 M')),
+        ('11 M', ('1 day', '1 W', '1 M')),
+
+        # 1+ years
+        ('1 Y',  ('1 day', '1 W', '1 M')),
+    ])
+
+    # Sizes allow for quick translation from bar sizes above to actual
+    # timeframes to make a comparison with the actual data
+    _sizes = {
+        'secs': (TimeFrame.Seconds, 1),
+        'min': (TimeFrame.Minutes, 1),
+        'mins': (TimeFrame.Minutes, 1),
+        'hour': (TimeFrame.Minutes, 60),
+        'hours': (TimeFrame.Minutes, 60),
+        'day': (TimeFrame.Days, 1),
+        'W': (TimeFrame.Weeks, 1),
+        'M': (TimeFrame.Months, 1),
+    }
+
+    _dur2tf = {
+        'S': TimeFrame.Seconds,
+        'D': TimeFrame.Days,
+        'W': TimeFrame.Weeks,
+        'M': TimeFrame.Months,
+        'Y': TimeFrame.Years,
+    }
+
     # Set a base for the data requests (historical/realtime) to distinguish the
     # id in the error notifications from orders, where the basis (usually
     # starting at 1) is set by TWS
@@ -94,9 +247,8 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         self.refreshing = False
 
         self.broker = None  # broker instance
-        self.datas = list()  # datas that have registered over start
+        self.datas = dict()  # data stored in dict instead of queue and get queue
         self._env = None  # reference to cerebro for general notifications
-        self.iscash = dict()
 
         # Create connection object
         self.conn = IB().connect(host=self.p.host, port=self.p.port, clientId=self.p.clientId)
@@ -111,15 +263,49 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
             self.clientId = random.randint(1, pow(2, 16) - 1)
         else:
             self.clientId = self.p.clientId
+        
+        # This utility key function transforms a barsize into a:
+        #   (Timeframe, Compression) tuple which can be sorted
+        def keyfn(x):
+            n, t = x.split()
+            tf, comp = self._sizes[t]
+            return (tf, int(n) * comp)
+
+        # This utility key function transforms a duration into a:
+        #   (Timeframe, Compression) tuple which can be sorted
+        def key2fn(x):
+            n, d = x.split()
+            tf = self._dur2tf[d]
+            return (tf, int(n))
+
+        # Generate a table of reverse durations
+        self.revdur = collections.defaultdict(list)
+        # The table (dict) is a ONE to MANY relation of
+        #   duration -> barsizes
+        # Here it is reversed to get a ONE to MANY relation of
+        #   barsize -> durations
+        for duration, barsizes in self._durations.items():
+            for barsize in barsizes:
+                self.revdur[keyfn(barsize)].append(duration)
+
+        # Once managed, sort the durations according to real duration and not
+        # to the text form using the utility key above
+        for barsize in self.revdur:
+            self.revdur[barsize].sort(key=key2fn)
+
 
     def start(self, data=None, broker=None):
         self.reconnect(fromstart=True)  # reconnect should be an invariant
         if data is not None:
             self._env = data._env
-            self.datas.append(data)
+            return [None]
 
         if broker is not None:
             self.broker = broker
+    
+    def poststart(self, data):
+        # instead of saving this as seperate dict, we hold all datas in the datas class
+        self.datas[data.contract.conId] = data
 
     def stop(self):
         try:
@@ -137,7 +323,6 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         self.logmsg(*args)
         if self.p.notifyall:
             self.notifs.put(args)
-
 
     def connected(self):
         # The isConnected method is available through __getattr__ indirections
@@ -203,13 +388,13 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         return False  # connection/reconnection failed
     
     def startdatas(self):
-        for data in self.datas:
+        for _ , data in self.datas.items():
             data.reqdata()
         # Force an update
         self.conn.sleep(self.p.refreshrate)
 
     def stopdatas(self):
-        for data in self.datas:
+        for _ , data in self.datas.items():
             data.canceldata()
         # Force an update
         self.conn.sleep(self.p.refreshrate)
@@ -316,10 +501,10 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         ticker = self.conn.reqMktData(contract, genericTickList=ticks, snapshot=False)
 
         if contract.secType in ["CASH", "CFD"]:
-            self.iscash[contract.conId] = True
+            self.datas[contract.conId].iscash = True
             ticks = ""  # cash markets do not get RTVOLUME
             if what == "ASK":
-                self.iscash[contract.conId] = 2
+                self.datas[contract.conId].iscash = 2
 
         return ticker
 
@@ -358,32 +543,146 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         )
 
         if contract.secType in ["CASH", "CFD"]:
-            self.iscash[contract.conId] = True
+            self.datas[contract.conId].iscash = True
             if not what:
                 what = "BID"  # TRADES doesn't work
             elif what == "ASK":
-                self.iscash[contract.conId] = 2
+                self.datas[contract.conId].iscash = 2
         else:
             what = what or "TRADES"
+        
+        # I dont think I need this anymore as I dont need to manually register history
 
-        # split barsize "x time", look in sizes for (tf, comp) get tf
-        tframe = self._sizes[barsize.split()[1]][0]
-        self.histfmt[contract.conId] = tframe >= TimeFrame.Days
-        self.histsend[contract.conId] = sessionend
-        self.histtz[contract.conId] = tz
+        # # split barsize "x time", look in sizes for (tf, comp) get tf
+        # tframe = self._sizes[barsize.split()[1]][0]
+        # self.histfmt[contract.conId] = tframe >= TimeFrame.Days
+        # self.histsend[contract.conId] = sessionend
+        # self.histtz[contract.conId] = tz
 
         return ticker
     
-    def cancelQueue(self, q, sendnone=False):
+    def cancelQueue(self, contract, sendnone=False):
         '''Cancels a Queue for data delivery'''
-        # pop ts (tickers) and with the result qs (queues)
-        tickerId = self.ts.pop(q, None)
-        self.qs.pop(tickerId, None)
 
-        self.iscash.pop(tickerId, None)
-
+        # dereference the list and unassign any subscibed datas
+        self.datas[contract.conId].tlive = list(self.datas[contract.conId].tlive)
         if sendnone:
-            q.put(None)
+            self.datas[contract.conId].tlive.append(None)
+
+    def getdurations(self,  timeframe, compression):
+        key = (timeframe, compression)
+        if key not in self.revdur:
+            return []
+
+        return self.revdur[key]
+    
+    def getmaxduration(self, timeframe, compression):
+        key = (timeframe, compression)
+        try:
+            return self.revdur[key][-1]
+        except (KeyError, IndexError):
+            pass
+
+        return None
+    
+    def reqHistoricalDataEx(self, contract, enddate, begindate,
+                            timeframe, compression,
+                            what=None, useRTH=False, tz='', sessionend=None,
+                            tickerId=None):
+        '''
+        Extension of the raw reqHistoricalData proxy, which takes two dates
+        rather than a duration, barsize and date
+
+        It uses the IB published valid duration/barsizes to make a mapping and
+        spread a historical request over several historical requests if needed
+        '''
+        # Keep a copy for error reporting purposes
+        kwargs = locals().copy()
+        kwargs.pop('self', None)  # remove self, no need to report it
+
+        if timeframe < TimeFrame.Seconds:
+            # Ticks are not supported
+            return [None]
+
+        if enddate is None:
+            enddate = datetime.now()
+
+        if begindate is None:
+            duration = self.getmaxduration(timeframe, compression)
+            if duration is None:
+                err = ('No duration for historical data request for '
+                       'timeframe/compresison')
+                self.notifs.put((err, (), kwargs))
+                return [None]
+            barsize = self.tfcomp_to_size(timeframe, compression)
+            if barsize is None:
+                err = ('No supported barsize for historical data request for '
+                       'timeframe/compresison')
+                self.notifs.put((err, (), kwargs))
+                return [None]
+
+            return self.reqHistoricalData(contract=contract, enddate=enddate,
+                                          duration=duration, barsize=barsize,
+                                          what=what, useRTH=useRTH, tz=tz,
+                                          sessionend=sessionend)
+
+        # Check if the requested timeframe/compression is supported by IB
+        durations = self.getdurations(timeframe, compression)
+        if not durations:  # return a queue and put a None in it
+            return [None]
+
+        # Get or reuse a queue
+        if tickerId is None:
+            tickerId, q = self.getTickerQueue()
+        else:
+            tickerId, q = self.reuseQueue(tickerId)  # reuse q for old tickerId
+
+        # Get the best possible duration to reduce number of requests
+        duration = None
+        for dur in durations:
+            intdate = self.dt_plus_duration(begindate, dur)
+            if intdate >= enddate:
+                intdate = enddate
+                duration = dur  # begin -> end fits in single request
+                break
+
+        if duration is None:  # no duration large enough to fit the request
+            duration = durations[-1]
+
+            # Store the calculated data
+            # self.histexreq[tickerId] = dict(
+            #     contract=contract, enddate=enddate, begindate=intdate,
+            #     timeframe=timeframe, compression=compression,
+            #     what=what, useRTH=useRTH, tz=tz, sessionend=sessionend)
+            
+        # I dont think needed anymore since no longer manually using register
+
+        # barsize = self.tfcomp_to_size(timeframe, compression)
+        # self.histfmt[tickerId] = timeframe >= TimeFrame.Days
+        # self.histsend[tickerId] = sessionend
+        # self.histtz[tickerId] = tz
+
+        if contract.secType in ['CASH', 'CFD']:
+            self.datas[contract.conId].iscash = 1  # msg.field code
+            if not what:
+                what = 'BID'  # default for cash unless otherwise specified
+
+        elif contract.secType in ['IND'] and self.p.indcash:
+            self.datas[contract.conId].iscash = 4  # msg.field code
+
+        what = what or 'TRADES'
+
+        ticker = self.conn.reqHistoricalData(
+            contract=contract,
+            enddate=enddate.strftime("%Y%m%d %H:%M:%S") + " GMT",
+            duration=duration,
+            barsize=barsize,
+            whatToShow=what,
+            useRTH=useRTH,
+            formatDate=2,
+        )
+        return ticker
+
 
     def connectedEvent(self):
         """
@@ -547,25 +846,28 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         elif errorCode in [200, 203, 162, 320, 321, 322]:
             # cdetails 200 security not found, notify over right queue
             # cdetails 203 security not allowed for acct
-            pass
+            self.cancelQueue(contract, True)
 
         elif errorCode in [354, 420]:
             # 354 no subscription, 420 no real-time bar for contract
             # the calling data to let the data know ... it cannot resub
-            pass
+            self.datas[contract.conId].tlive.append(-errorCode)
+            self.cancelQueue(contract)
 
         elif errorCode == 10225:
             # 10225-Bust event occurred, current subscription is deactivated.
             # Please resubscribe real-time bars immediately.
-            pass
+            self.datas[contract.conId].tlive.append(-errorCode)
 
         elif errorCode == 326:  # not recoverable, clientId in use
             self.dontreconnect = True
             self.conn.disconnect()
+            self.stopdatas()
 
         elif errorCode == 502:
             # Cannot connect to TWS: port, config not open, tws off (504 then)
             self.conn.disconnect()
+            self.stopdatas()
 
         elif errorCode == 504:  # Not Connected for data op
             # Once for each data
@@ -575,19 +877,23 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
             # TWS has been closed. The port for a new connection is there
             # newport = int(msg.errorMsg.split('-')[-1])  # bla bla bla -7496
             self.conn.disconnect()
+            self.stopdata()
 
         elif errorCode == 1100:
             # Connection lost - Notify ... datas will wait on the queue
             # with no messages arriving
-            pass
+            for _, data in self.datas.items():
+                data.tlive.append(-errorCode)
 
         elif errorCode == 1101:
             # Connection restored and tickerIds are gone
-            pass
+            for _, data in self.datas.items():
+                data.tlive.append(-errorCode)
 
         elif errorCode == 1102:
             # Connection restored and tickerIds maintained
-            pass
+            for _, data in self.datas.items():
+                data.tlive.append(-errorCode)
 
         elif errorCode < 500:
             # Given the myriad of errorCodes, start by assuming is an order
@@ -595,10 +901,9 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
             if reqId < self.REQIDBASE:
                 if self.broker is not None:
                     self.broker.push_ordererror(reqId, errorCode)
-            # else:
-            #     # Cancel the queue if a "data" reqId error is given: sanity
-            #     q = self.qs[reqId.id]
-            #     self.cancelQueue(q, True)
+            else:
+                # Cancel the queue if a "data" reqId error is given: sanity
+                self.cancelQueue(contract, True)
 
     def timeoutEvent(self, idlePeriod):
         """

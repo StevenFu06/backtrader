@@ -261,6 +261,7 @@ class IBAData(with_metaclass(MetaIBData, DataBase)):
     def __init__(self, **kwargs):
         self.ib = self._store(**kwargs)
         self.do_refresh = False
+        self.iscash = False
 
         self.precontract = self.parsecontract(self.p.dataname)
         self.pretradecontract = self.parsecontract(self.p.tradename)
@@ -384,12 +385,15 @@ class IBAData(with_metaclass(MetaIBData, DataBase)):
         cds = self.ib.getContractDetails(self.precontract, maxcount=1)
         if cds is not None:
             cdetails = cds[0]
-            self.contract = cdetails.contractDetails.m_summary
+            self.contract = cdetails.contractDetails.contract
             self.contractdetails = cdetails.contractDetails
         else:
             # no contract can be found (or many)
             self.put_notification(self.DISCONNECTED)
             return
+        
+        # create store dict after contract is setup
+        self.ib.poststart(self)
 
         if self.pretradecontract is None:
             # no different trading asset - default to standard asset
@@ -401,7 +405,7 @@ class IBAData(with_metaclass(MetaIBData, DataBase)):
             cds = self.ib.getContractDetails(self.pretradecontract, maxcount=1)
             if cds is not None:
                 cdetails = cds[0]
-                self.tradecontract = cdetails.contractDetails.m_summary
+                self.tradecontract = cdetails.contractDetails.contract
                 self.tradecontractdetails = cdetails.contractDetails
             else:
                 # no contract can be found (or many)
@@ -513,7 +517,7 @@ class IBAData(with_metaclass(MetaIBData, DataBase)):
                 # Process the message according to expected return type
                 if not self._statelivereconn:
                     if self._laststatus != self.LIVE:
-                        if self.tlive.qsize() <= 1:  # very short live queue
+                        if len(self.tlive) <= 1:  # very short live queue
                             self.put_notification(self.LIVE)
 
                     if self._usertvol:
@@ -557,7 +561,7 @@ class IBAData(with_metaclass(MetaIBData, DataBase)):
                 continue
 
             elif self._state == self._ST_HISTORBACK:
-                msg = self.thist.get()
+                msg = self.thist.pop(0)
                 if msg is None:  # Conn broken during historical/backfilling
                     # Situation not managed. Simply bail out
                     self._subcription_valid = False

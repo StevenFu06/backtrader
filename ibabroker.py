@@ -338,9 +338,9 @@ class IBABroker(with_metaclass(MetaIBABroker, BrokerBase)):
 
         # ocoize if needed
         if order.oco is None:  # Generate a UniqueId
-            order.m_ocaGroup = bytes(uuid.uuid4())
+            order.ocaGroup = bytes(uuid.uuid4())
         else:
-            order.m_ocaGroup = self.orderbyid[order.oco.orderId].m_ocaGroup
+            order.ocaGroup = self.orderbyid[order.oco.orderId].ocaGroup
 
         self.orderbyid[order.orderId] = order
         self.ib.placeOrder(order.data.p.tradecontract, order)
