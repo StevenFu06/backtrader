@@ -580,7 +580,11 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
     def timeoffset(self):
         """Simplified version using async reqCurrentTime. Always returns a positive timedelta."""
         if self.p.timeoffset:
-            return abs(datetime.now(timezone.utc) - self.conn.reqCurrentTime())
+            servertime = self.conn.reqCurrentTime()
+            # this doesnt seem to work below 1 sec so we ened to sleep it for 1 sec min
+            self.conn.sleep(1)
+            localtime = datetime.now(timezone.utc)
+            return abs(localtime - servertime)
         return timedelta()
 
     def makecontract(self, symbol, sectype, exch, curr, expiry="", strike=0.0, right="", mult=1):
@@ -895,7 +899,7 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         """
         Called with the fill and the ongoing trade it belongs to.
         """
-        # self.broker.push_execution(fill.execution)
+        self.broker.push_execution(fill.execution)
         pass
 
     def commissionReportEvent(self, ibtrade, fill, report):

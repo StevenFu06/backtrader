@@ -299,7 +299,7 @@ class IBABroker(with_metaclass(MetaIBABroker, BrokerBase)):
         self.ib.stop()
 
     def next(self):
-        self.notifs.put(None)  # mark notificatino boundary
+        self.notifs.put(None)  # mark notification boundary
         if self.do_refresh:  # refresh ib_async
             self.ib.conn.sleep(self.ib.p.refreshrate)
 
@@ -312,7 +312,7 @@ class IBABroker(with_metaclass(MetaIBABroker, BrokerBase)):
         return self.value
 
     def getposition(self, data, clone=True):
-        return self.ib.getposition(data.p.tradecontract, clone=clone)
+        return self.ib.getposition(data.tradecontract, clone=clone)
 
     def cancel(self, order):
         try:
@@ -343,13 +343,13 @@ class IBABroker(with_metaclass(MetaIBABroker, BrokerBase)):
             order.ocaGroup = self.orderbyid[order.oco.orderId].ocaGroup
 
         self.orderbyid[order.orderId] = order
-        self.ib.placeOrder(order.data.p.tradecontract, order)
+        self.ib.placeOrder(order.data.tradecontract, order)
         self.notify(order)
 
         return order
 
     def getcommissioninfo(self, data):
-        contract = data.p.tradecontract
+        contract = data.tradecontract
         try:
             mult = float(contract.multiplier)
         except (ValueError, TypeError):
@@ -485,8 +485,8 @@ class IBABroker(with_metaclass(MetaIBABroker, BrokerBase)):
         else:  # Unknown status ...
             pass
 
-    # def push_execution(self, execution):
-    #     self.executions[execution.execId] = execution
+    def push_execution(self, execution):
+        self.executions[execution.execId] = execution
 
     def push_commissionreport(self, ibtrade, fill, report):
         ex = fill.execution
@@ -518,7 +518,7 @@ class IBABroker(with_metaclass(MetaIBABroker, BrokerBase)):
 
         # Use the actual time provided by the execution object
         # The report from TWS is in actual local time, not the data's tz
-        dt = date2num(datetime.strptime(ex.m_time, "%Y%m%d  %H:%M:%S"))
+        dt = date2num(ex.time)
 
         # Need to simulate a margin, but it plays no role, because it is
         # controlled by a real broker. Let's set the price of the item
