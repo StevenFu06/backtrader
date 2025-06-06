@@ -560,7 +560,7 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
             else:
                 order.reject()  # default for all other cases
 
-            self.notify(order)
+        self.notify(order)
 
     def push_orderstate(self, msg):
         with self._lock_orders:
