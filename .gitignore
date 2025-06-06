@@ -72,3 +72,4 @@ datas/*.py
 backtrader/brokers/ibbroker.py
 .gitignore
 backtrader.code-workspace
+scratch.py
