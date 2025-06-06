@@ -1,13 +1,14 @@
 import collections
 from copy import copy
 import random
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from ib_async import IB, Contract
 from backtrader import Position, TimeFrame
 from backtrader.metabase import MetaParams
 from backtrader.utils.py3 import with_metaclass, queue
 from backtrader.utils import AutoDict
+
 
 
 class MetaSingleton(MetaParams):
@@ -30,152 +31,274 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
     # Using a timedelta as a key allows to quickly find out which bar size
     # bar size (values in the tuples int the dict) can be used.
 
-    _durations = dict([
-        # 60 seconds - 1 min
-        ('60 S',
-         ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs',
-          '1 min')),
-
-        # 120 seconds - 2 mins
-        ('120 S',
-         ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs',
-          '1 min', '2 mins')),
-
-        # 180 seconds - 3 mins
-        ('180 S',
-         ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs',
-          '1 min', '2 mins', '3 mins')),
-
-        # 300 seconds - 5 mins
-        ('300 S',
-         ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs',
-          '1 min', '2 mins', '3 mins', '5 mins')),
-
-        # 600 seconds - 10 mins
-        ('600 S',
-         ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs',
-          '1 min', '2 mins', '3 mins', '5 mins', '10 mins')),
-
-        # 900 seconds - 15 mins
-        ('900 S',
-         ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs',
-          '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins')),
-
-        # 1200 seconds - 20 mins
-        ('1200 S',
-         ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs',
-          '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
-          '20 mins')),
-
-        # 1800 seconds - 30 mins
-        ('1800 S',
-         ('1 secs', '5 secs', '10 secs', '15 secs', '30 secs',
-          '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
-          '20 mins', '30 mins')),
-
-        # 3600 seconds - 1 hour
-        ('3600 S',
-         ('5 secs', '10 secs', '15 secs', '30 secs',
-          '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
-          '20 mins', '30 mins',
-          '1 hour')),
-
-        # 7200 seconds - 2 hours
-        ('7200 S',
-         ('5 secs', '10 secs', '15 secs', '30 secs',
-          '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
-          '20 mins', '30 mins',
-          '1 hour', '2 hours')),
-
-        # 10800 seconds - 3 hours
-        ('10800 S',
-         ('10 secs', '15 secs', '30 secs',
-          '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
-          '20 mins', '30 mins',
-          '1 hour', '2 hours', '3 hours')),
-
-        # 14400 seconds - 4 hours
-        ('14400 S',
-         ('15 secs', '30 secs',
-          '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
-          '20 mins', '30 mins',
-          '1 hour', '2 hours', '3 hours', '4 hours')),
-
-        # 28800 seconds - 8 hours
-        ('28800 S',
-         ('30 secs',
-          '1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
-          '20 mins', '30 mins',
-          '1 hour', '2 hours', '3 hours', '4 hours', '8 hours')),
-
-        # 1 days
-        ('1 D',
-         ('1 min', '2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
-          '20 mins', '30 mins',
-          '1 hour', '2 hours', '3 hours', '4 hours', '8 hours',
-          '1 day')),
-
-        # 2 days
-        ('2 D',
-         ('2 mins', '3 mins', '5 mins', '10 mins', '15 mins',
-          '20 mins', '30 mins',
-          '1 hour', '2 hours', '3 hours', '4 hours', '8 hours',
-          '1 day')),
-
-        # 1 weeks
-        ('1 W',
-         ('3 mins', '5 mins', '10 mins', '15 mins',
-          '20 mins', '30 mins',
-          '1 hour', '2 hours', '3 hours', '4 hours', '8 hours',
-          '1 day', '1 W')),
-
-        # 2 weeks
-        ('2 W',
-         ('15 mins', '20 mins', '30 mins',
-          '1 hour', '2 hours', '3 hours', '4 hours', '8 hours',
-          '1 day', '1 W')),
-
-        # 1 months
-        ('1 M',
-         ('30 mins',
-          '1 hour', '2 hours', '3 hours', '4 hours', '8 hours',
-          '1 day', '1 W', '1 M')),
-
-        # 2+ months
-        ('2 M', ('1 day', '1 W', '1 M')),
-        ('3 M', ('1 day', '1 W', '1 M')),
-        ('4 M', ('1 day', '1 W', '1 M')),
-        ('5 M', ('1 day', '1 W', '1 M')),
-        ('6 M', ('1 day', '1 W', '1 M')),
-        ('7 M', ('1 day', '1 W', '1 M')),
-        ('8 M', ('1 day', '1 W', '1 M')),
-        ('9 M', ('1 day', '1 W', '1 M')),
-        ('10 M', ('1 day', '1 W', '1 M')),
-        ('11 M', ('1 day', '1 W', '1 M')),
-
-        # 1+ years
-        ('1 Y',  ('1 day', '1 W', '1 M')),
-    ])
+    _durations = dict(
+        [
+            # 60 seconds - 1 min
+            ("60 S", ("1 secs", "5 secs", "10 secs", "15 secs", "30 secs", "1 min")),
+            # 120 seconds - 2 mins
+            ("120 S", ("1 secs", "5 secs", "10 secs", "15 secs", "30 secs", "1 min", "2 mins")),
+            # 180 seconds - 3 mins
+            ("180 S", ("1 secs", "5 secs", "10 secs", "15 secs", "30 secs", "1 min", "2 mins", "3 mins")),
+            # 300 seconds - 5 mins
+            ("300 S", ("1 secs", "5 secs", "10 secs", "15 secs", "30 secs", "1 min", "2 mins", "3 mins", "5 mins")),
+            # 600 seconds - 10 mins
+            (
+                "600 S",
+                ("1 secs", "5 secs", "10 secs", "15 secs", "30 secs", "1 min", "2 mins", "3 mins", "5 mins", "10 mins"),
+            ),
+            # 900 seconds - 15 mins
+            (
+                "900 S",
+                (
+                    "1 secs",
+                    "5 secs",
+                    "10 secs",
+                    "15 secs",
+                    "30 secs",
+                    "1 min",
+                    "2 mins",
+                    "3 mins",
+                    "5 mins",
+                    "10 mins",
+                    "15 mins",
+                ),
+            ),
+            # 1200 seconds - 20 mins
+            (
+                "1200 S",
+                (
+                    "1 secs",
+                    "5 secs",
+                    "10 secs",
+                    "15 secs",
+                    "30 secs",
+                    "1 min",
+                    "2 mins",
+                    "3 mins",
+                    "5 mins",
+                    "10 mins",
+                    "15 mins",
+                    "20 mins",
+                ),
+            ),
+            # 1800 seconds - 30 mins
+            (
+                "1800 S",
+                (
+                    "1 secs",
+                    "5 secs",
+                    "10 secs",
+                    "15 secs",
+                    "30 secs",
+                    "1 min",
+                    "2 mins",
+                    "3 mins",
+                    "5 mins",
+                    "10 mins",
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                ),
+            ),
+            # 3600 seconds - 1 hour
+            (
+                "3600 S",
+                (
+                    "5 secs",
+                    "10 secs",
+                    "15 secs",
+                    "30 secs",
+                    "1 min",
+                    "2 mins",
+                    "3 mins",
+                    "5 mins",
+                    "10 mins",
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                ),
+            ),
+            # 7200 seconds - 2 hours
+            (
+                "7200 S",
+                (
+                    "5 secs",
+                    "10 secs",
+                    "15 secs",
+                    "30 secs",
+                    "1 min",
+                    "2 mins",
+                    "3 mins",
+                    "5 mins",
+                    "10 mins",
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                    "2 hours",
+                ),
+            ),
+            # 10800 seconds - 3 hours
+            (
+                "10800 S",
+                (
+                    "10 secs",
+                    "15 secs",
+                    "30 secs",
+                    "1 min",
+                    "2 mins",
+                    "3 mins",
+                    "5 mins",
+                    "10 mins",
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                    "2 hours",
+                    "3 hours",
+                ),
+            ),
+            # 14400 seconds - 4 hours
+            (
+                "14400 S",
+                (
+                    "15 secs",
+                    "30 secs",
+                    "1 min",
+                    "2 mins",
+                    "3 mins",
+                    "5 mins",
+                    "10 mins",
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                    "2 hours",
+                    "3 hours",
+                    "4 hours",
+                ),
+            ),
+            # 28800 seconds - 8 hours
+            (
+                "28800 S",
+                (
+                    "30 secs",
+                    "1 min",
+                    "2 mins",
+                    "3 mins",
+                    "5 mins",
+                    "10 mins",
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                    "2 hours",
+                    "3 hours",
+                    "4 hours",
+                    "8 hours",
+                ),
+            ),
+            # 1 days
+            (
+                "1 D",
+                (
+                    "1 min",
+                    "2 mins",
+                    "3 mins",
+                    "5 mins",
+                    "10 mins",
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                    "2 hours",
+                    "3 hours",
+                    "4 hours",
+                    "8 hours",
+                    "1 day",
+                ),
+            ),
+            # 2 days
+            (
+                "2 D",
+                (
+                    "2 mins",
+                    "3 mins",
+                    "5 mins",
+                    "10 mins",
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                    "2 hours",
+                    "3 hours",
+                    "4 hours",
+                    "8 hours",
+                    "1 day",
+                ),
+            ),
+            # 1 weeks
+            (
+                "1 W",
+                (
+                    "3 mins",
+                    "5 mins",
+                    "10 mins",
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                    "2 hours",
+                    "3 hours",
+                    "4 hours",
+                    "8 hours",
+                    "1 day",
+                    "1 W",
+                ),
+            ),
+            # 2 weeks
+            (
+                "2 W",
+                ("15 mins", "20 mins", "30 mins", "1 hour", "2 hours", "3 hours", "4 hours", "8 hours", "1 day", "1 W"),
+            ),
+            # 1 months
+            ("1 M", ("30 mins", "1 hour", "2 hours", "3 hours", "4 hours", "8 hours", "1 day", "1 W", "1 M")),
+            # 2+ months
+            ("2 M", ("1 day", "1 W", "1 M")),
+            ("3 M", ("1 day", "1 W", "1 M")),
+            ("4 M", ("1 day", "1 W", "1 M")),
+            ("5 M", ("1 day", "1 W", "1 M")),
+            ("6 M", ("1 day", "1 W", "1 M")),
+            ("7 M", ("1 day", "1 W", "1 M")),
+            ("8 M", ("1 day", "1 W", "1 M")),
+            ("9 M", ("1 day", "1 W", "1 M")),
+            ("10 M", ("1 day", "1 W", "1 M")),
+            ("11 M", ("1 day", "1 W", "1 M")),
+            # 1+ years
+            ("1 Y", ("1 day", "1 W", "1 M")),
+        ]
+    )
 
     # Sizes allow for quick translation from bar sizes above to actual
     # timeframes to make a comparison with the actual data
     _sizes = {
-        'secs': (TimeFrame.Seconds, 1),
-        'min': (TimeFrame.Minutes, 1),
-        'mins': (TimeFrame.Minutes, 1),
-        'hour': (TimeFrame.Minutes, 60),
-        'hours': (TimeFrame.Minutes, 60),
-        'day': (TimeFrame.Days, 1),
-        'W': (TimeFrame.Weeks, 1),
-        'M': (TimeFrame.Months, 1),
+        "secs": (TimeFrame.Seconds, 1),
+        "min": (TimeFrame.Minutes, 1),
+        "mins": (TimeFrame.Minutes, 1),
+        "hour": (TimeFrame.Minutes, 60),
+        "hours": (TimeFrame.Minutes, 60),
+        "day": (TimeFrame.Days, 1),
+        "W": (TimeFrame.Weeks, 1),
+        "M": (TimeFrame.Months, 1),
     }
 
     _dur2tf = {
-        'S': TimeFrame.Seconds,
-        'D': TimeFrame.Days,
-        'W': TimeFrame.Weeks,
-        'M': TimeFrame.Months,
-        'Y': TimeFrame.Years,
+        "S": TimeFrame.Seconds,
+        "D": TimeFrame.Days,
+        "W": TimeFrame.Weeks,
+        "M": TimeFrame.Months,
+        "Y": TimeFrame.Years,
     }
 
     # Set a base for the data requests (historical/realtime) to distinguish the
@@ -263,7 +386,7 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
             self.clientId = random.randint(1, pow(2, 16) - 1)
         else:
             self.clientId = self.p.clientId
-        
+
         # This utility key function transforms a barsize into a:
         #   (Timeframe, Compression) tuple which can be sorted
         def keyfn(x):
@@ -293,7 +416,6 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         for barsize in self.revdur:
             self.revdur[barsize].sort(key=key2fn)
 
-
     def start(self, data=None, broker=None):
         self.reconnect(fromstart=True)  # reconnect should be an invariant
         if data is not None:
@@ -302,7 +424,7 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
 
         if broker is not None:
             self.broker = broker
-    
+
     def poststart(self, data):
         # instead of saving this as seperate dict, we hold all datas in the datas class
         self.datas[data.contract.conId] = data
@@ -335,7 +457,7 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
             pass
 
         return False  # non-connected (including non-initialized)
-    
+
     def reconnect(self, fromstart=False, resub=False):
         # This method must be an invariant in that it can be called several
         # times from the same source and must be consistent. An exampler would
@@ -364,7 +486,7 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         if self.dontreconnect:
             return False
 
-        # This is only invoked from the main thread by datas 
+        # This is only invoked from the main thread by datas
         retries = self.p.reconnect
         if retries >= 0:
             retries += firstconnect
@@ -386,19 +508,19 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
 
         self.dontreconnect = True
         return False  # connection/reconnection failed
-    
+
     def startdatas(self):
-        for _ , data in self.datas.items():
+        for _, data in self.datas.items():
             data.reqdata()
         # Force an update
         self.conn.sleep(self.p.refreshrate)
 
     def stopdatas(self):
-        for _ , data in self.datas.items():
+        for _, data in self.datas.items():
             data.canceldata()
         # Force an update
         self.conn.sleep(self.p.refreshrate)
-    
+
     def get_notifications(self):
         """Return the pending "store" notifications"""
         # The background thread could keep on adding notifications. The None
@@ -441,11 +563,11 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
             return copy(position)
         return position
 
-    def nextOrderId(self):
+    def nextReqId(self):
         """Mimic old nextValidId + itertools.count combo"""
         # Dont actually increment it because then reqID will be incremented AGAIN when
         # getReqId is called by IB(). It will be out of sync.
-        return self.conn.client._reqIdSeq + 1
+        return self.conn.client._reqIdSeq
 
     def cancelOrder(self, order):
         """Proxy to cancelOrder"""
@@ -456,25 +578,27 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         self.conn.placeOrder(contract, order)
 
     def timeoffset(self):
-        """Simplified version using async reqCurrentTime"""
-        return self.conn.reqCurrentTime() - datetime.now()
+        """Simplified version using async reqCurrentTime. Always returns a positive timedelta."""
+        if self.p.timeoffset:
+            return abs(datetime.now(timezone.utc) - self.conn.reqCurrentTime())
+        return timedelta()
 
     def makecontract(self, symbol, sectype, exch, curr, expiry="", strike=0.0, right="", mult=1):
         """returns a contract from the parameters without check"""
 
         contract = Contract()
-        contract.symbol = bytes(symbol)
-        contract.secType = bytes(sectype)
-        contract.exchange = bytes(exch)
+        contract.symbol = symbol
+        contract.secType = sectype
+        contract.exchange = exch
         if curr:
-            contract.currency = bytes(curr)
+            contract.currency = curr
         if sectype in ["FUT", "OPT", "FOP"]:
-            contract.expiry = bytes(expiry)
+            contract.expiry = expiry
         if sectype in ["OPT", "FOP"]:
             contract.strike = strike
-            contract.right = bytes(right)
+            contract.right = right
         if mult:
-            contract.multiplier = bytes(mult)
+            contract.multiplier = mult
         return contract
 
     def getContractDetails(self, contract, maxcount=None):
@@ -487,7 +611,7 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
             return None
         return cds
 
-    def reqMktData(self, contract, what=None):
+    def reqMktData(self, contract):
         """Creates a MarketData subscription
 
         Params:
@@ -498,84 +622,77 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         """
         # get a ticker/queue for identification/data delivery
         ticks = "233"  # request RTVOLUME tick delivered over tickString
-        ticker = self.conn.reqMktData(contract, genericTickList=ticks, snapshot=False)
+        reqId = self.nextReqId()
 
         if contract.secType in ["CASH", "CFD"]:
-            self.datas[contract.conId].iscash = True
             ticks = ""  # cash markets do not get RTVOLUME
-            if what == "ASK":
-                self.datas[contract.conId].iscash = 2
 
-        return ticker
+        ticker = self.conn.reqMktData(contract, genericTickList=ticks, snapshot=False)
+        return reqId, ticker
 
     def cancelMktData(self, contract):
         """Cancels an existing MarketData subscription"""
 
         self.conn.cancelMktData(contract)
 
-    def reqRealTimeBars(self, contract, what="TRADES", useRTH=False):
+    def reqRealTimeBars(self, contract, what=None, useRTH=False):
         """Creates a request for (5 seconds) Real Time Bars"""
 
-        ticker = self.conn.reqRealTimeBars(contract, barsize=5, whatToShow=what, useRTH=useRTH)
-        return ticker
-    
+        if contract.secType in ["CASH", "CFD", "FUT"]:
+            if not what:
+                what = "BID"  # TRADES doesn't work
+        else:
+            what = what or "TRADES"
+
+        reqId = self.nextReqId()
+        ticker = self.conn.reqRealTimeBars(contract, barSize=5, whatToShow=what, useRTH=useRTH)
+        return reqId, ticker
+
     def cancelRealTimeBars(self, ticker):
-        '''Cancels an existing MarketData subscription
-        
+        """Cancels an existing MarketData subscription
+
         Args:
             The thing that realtimeBars returns. IB_Async just calls bars.reqID to cancel
-        '''
+        """
         self.conn.cancelRealTimeBars(ticker)
 
-
-    def reqHistoricalData(self, contract, enddate, duration, barsize, what=None, useRTH=False, tz="", sessionend=None):
+    def reqHistoricalData(self, contract, enddate, duration, barsize, what=None, useRTH=False):
         """Proxy to reqHistorical Data"""
 
-        # get a ticker/queue for identification/data delivery
+        if contract.secType in ["CASH", "CFD", "FUT"]:
+            if not what:
+                what = "BID"  # TRADES doesn't work
+        else:
+            what = what or "TRADES"
+
+        reqId = self.nextReqId()
         ticker = self.conn.reqHistoricalData(
             contract=contract,
-            enddate=enddate.strftime("%Y%m%d %H:%M:%S") + " GMT",
-            duration=duration,
-            barsize=barsize,
+            endDateTime=enddate,
+            durationStr=duration,
+            barSizeSetting=barsize,
             whatToShow=what,
             useRTH=useRTH,
             formatDate=2,
         )
+        return reqId, ticker
 
-        if contract.secType in ["CASH", "CFD"]:
-            self.datas[contract.conId].iscash = True
-            if not what:
-                what = "BID"  # TRADES doesn't work
-            elif what == "ASK":
-                self.datas[contract.conId].iscash = 2
-        else:
-            what = what or "TRADES"
-        
-        # I dont think I need this anymore as I dont need to manually register history
+    def getFeed(self, reqId, contract):
+        return self.datas[contract.conId].feed_by_id(reqId)
 
-        # # split barsize "x time", look in sizes for (tf, comp) get tf
-        # tframe = self._sizes[barsize.split()[1]][0]
-        # self.histfmt[contract.conId] = tframe >= TimeFrame.Days
-        # self.histsend[contract.conId] = sessionend
-        # self.histtz[contract.conId] = tz
-
-        return ticker
-    
-    def cancelQueue(self, contract, sendnone=False):
-        '''Cancels a Queue for data delivery'''
+    def cancelFeed(self, feed, sendnone=False):
+        """Cancels a Queue for data delivery"""
 
         # dereference the list and unassign any subscibed datas
-        self.datas[contract.conId].tlive = list(self.datas[contract.conId].tlive)
-        if sendnone:
-            self.datas[contract.conId].tlive.append(None)
+        feed.dereference(sendnone=sendnone)
 
-    def getdurations(self,  timeframe, compression):
+    def getdurations(self, timeframe, compression):
         key = (timeframe, compression)
         if key not in self.revdur:
             return []
 
         return self.revdur[key]
-    
+
     def getmaxduration(self, timeframe, compression):
         key = (timeframe, compression)
         try:
@@ -584,25 +701,79 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
             pass
 
         return None
-    
-    def reqHistoricalDataEx(self, contract, enddate, begindate,
-                            timeframe, compression,
-                            what=None, useRTH=False, tz='', sessionend=None,
-                            tickerId=None):
-        '''
+
+    def dt_plus_duration(self, dt, duration):
+        size, dim = duration.split()
+        size = int(size)
+        if dim == "S":
+            return dt + timedelta(seconds=size)
+
+        if dim == "D":
+            return dt + timedelta(days=size)
+
+        if dim == "W":
+            return dt + timedelta(days=size * 7)
+
+        if dim == "M":
+            month = dt.month - 1 + size  # -1 to make it 0 based, readd below
+            years, month = divmod(month, 12)
+            return dt.replace(year=dt.year + years, month=month + 1)
+
+        if dim == "Y":
+            return dt.replace(year=dt.year + size)
+
+        return dt  # could do nothing with it ... return it intact
+
+    def tfcomp_to_size(self, timeframe, compression):
+        if timeframe == TimeFrame.Months:
+            return "{} M".format(compression)
+
+        if timeframe == TimeFrame.Weeks:
+            return "{} W".format(compression)
+
+        if timeframe == TimeFrame.Days:
+            if not compression % 7:
+                return "{} W".format(compression // 7)
+
+            return "{} day".format(compression)
+
+        if timeframe == TimeFrame.Minutes:
+            if not compression % 60:
+                hours = compression // 60
+                return ("{} hour".format(hours)) + ("s" * (hours > 1))
+
+            return ("{} min".format(compression)) + ("s" * (compression > 1))
+
+        if timeframe == TimeFrame.Seconds:
+            return "{} secs".format(compression)
+
+        # Microseconds or ticks
+        return None
+
+    def reqHistoricalDataEx(
+        self,
+        contract,
+        enddate,
+        begindate,
+        timeframe,
+        compression,
+        what=None,
+        useRTH=False
+    ):
+        """
         Extension of the raw reqHistoricalData proxy, which takes two dates
         rather than a duration, barsize and date
 
         It uses the IB published valid duration/barsizes to make a mapping and
         spread a historical request over several historical requests if needed
-        '''
+        """
         # Keep a copy for error reporting purposes
         kwargs = locals().copy()
-        kwargs.pop('self', None)  # remove self, no need to report it
+        kwargs.pop("self", None)  # remove self, no need to report it
 
         if timeframe < TimeFrame.Seconds:
             # Ticks are not supported
-            return [None]
+            return None, None
 
         if enddate is None:
             enddate = datetime.now()
@@ -610,32 +781,28 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         if begindate is None:
             duration = self.getmaxduration(timeframe, compression)
             if duration is None:
-                err = ('No duration for historical data request for '
-                       'timeframe/compresison')
+                err = "No duration for historical data request for " "timeframe/compresison"
                 self.notifs.put((err, (), kwargs))
-                return [None]
+                return None, None
             barsize = self.tfcomp_to_size(timeframe, compression)
             if barsize is None:
-                err = ('No supported barsize for historical data request for '
-                       'timeframe/compresison')
+                err = "No supported barsize for historical data request for " "timeframe/compresison"
                 self.notifs.put((err, (), kwargs))
-                return [None]
+                return None, None
 
-            return self.reqHistoricalData(contract=contract, enddate=enddate,
-                                          duration=duration, barsize=barsize,
-                                          what=what, useRTH=useRTH, tz=tz,
-                                          sessionend=sessionend)
+            return self.reqHistoricalData(
+                contract=contract,
+                enddate=enddate,
+                duration=duration,
+                barsize=barsize,
+                what=what,
+                useRTH=useRTH,
+            )
 
         # Check if the requested timeframe/compression is supported by IB
         durations = self.getdurations(timeframe, compression)
         if not durations:  # return a queue and put a None in it
-            return [None]
-
-        # Get or reuse a queue
-        if tickerId is None:
-            tickerId, q = self.getTickerQueue()
-        else:
-            tickerId, q = self.reuseQueue(tickerId)  # reuse q for old tickerId
+            return None, None
 
         # Get the best possible duration to reduce number of requests
         duration = None
@@ -649,40 +816,15 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         if duration is None:  # no duration large enough to fit the request
             duration = durations[-1]
 
-            # Store the calculated data
-            # self.histexreq[tickerId] = dict(
-            #     contract=contract, enddate=enddate, begindate=intdate,
-            #     timeframe=timeframe, compression=compression,
-            #     what=what, useRTH=useRTH, tz=tz, sessionend=sessionend)
-            
-        # I dont think needed anymore since no longer manually using register
-
-        # barsize = self.tfcomp_to_size(timeframe, compression)
-        # self.histfmt[tickerId] = timeframe >= TimeFrame.Days
-        # self.histsend[tickerId] = sessionend
-        # self.histtz[tickerId] = tz
-
-        if contract.secType in ['CASH', 'CFD']:
-            self.datas[contract.conId].iscash = 1  # msg.field code
-            if not what:
-                what = 'BID'  # default for cash unless otherwise specified
-
-        elif contract.secType in ['IND'] and self.p.indcash:
-            self.datas[contract.conId].iscash = 4  # msg.field code
-
-        what = what or 'TRADES'
-
-        ticker = self.conn.reqHistoricalData(
+        barsize = self.tfcomp_to_size(timeframe, compression)
+        return self.reqHistoricalData(
             contract=contract,
-            enddate=enddate.strftime("%Y%m%d %H:%M:%S") + " GMT",
+            enddate=enddate,
             duration=duration,
             barsize=barsize,
-            whatToShow=what,
+            what=what,
             useRTH=useRTH,
-            formatDate=2,
         )
-        return ticker
-
 
     def connectedEvent(self):
         """
@@ -836,7 +978,9 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         Called when an error occurs.
         """
         if not self.p.notifyall:
-            self.notifs.put((reqId, errorCode, errorString, contract))
+            msg = (reqId, errorCode, errorString, contract)
+            print(f'Error occured: {msg}')
+            self.notifs.put((msg, (), {}))
 
         # Manage those events which have to do with connection
         if errorCode is None:
@@ -846,18 +990,19 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         elif errorCode in [200, 203, 162, 320, 321, 322]:
             # cdetails 200 security not found, notify over right queue
             # cdetails 203 security not allowed for acct
-            self.cancelQueue(contract, True)
+            self.cancelFeed(self.getFeed(reqId, contract), True)
 
         elif errorCode in [354, 420]:
             # 354 no subscription, 420 no real-time bar for contract
             # the calling data to let the data know ... it cannot resub
-            self.datas[contract.conId].tlive.append(-errorCode)
-            self.cancelQueue(contract)
+            feed = self.getFeed(reqId, contract)
+            feed.put_error(-errorCode)
+            self.cancelFeed(feed, True)
 
         elif errorCode == 10225:
             # 10225-Bust event occurred, current subscription is deactivated.
             # Please resubscribe real-time bars immediately.
-            self.datas[contract.conId].tlive.append(-errorCode)
+            self.getFeed(reqId, contract).put_error(-errorCode)
 
         elif errorCode == 326:  # not recoverable, clientId in use
             self.dontreconnect = True
@@ -883,17 +1028,17 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
             # Connection lost - Notify ... datas will wait on the queue
             # with no messages arriving
             for _, data in self.datas.items():
-                data.tlive.append(-errorCode)
+                data.feed_by_id(reqId).put_error(-errorCode)
 
         elif errorCode == 1101:
             # Connection restored and tickerIds are gone
             for _, data in self.datas.items():
-                data.tlive.append(-errorCode)
+                data.feed_by_id(reqId).put_error(-errorCode)
 
         elif errorCode == 1102:
             # Connection restored and tickerIds maintained
             for _, data in self.datas.items():
-                data.tlive.append(-errorCode)
+                data.feed_by_id(reqId).put_error(-errorCode)
 
         elif errorCode < 500:
             # Given the myriad of errorCodes, start by assuming is an order
@@ -903,7 +1048,7 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
                     self.broker.push_ordererror(reqId, errorCode)
             else:
                 # Cancel the queue if a "data" reqId error is given: sanity
-                self.cancelQueue(contract, True)
+                self.cancelFeed(self.getFeed(reqId, contract), True)
 
     def timeoutEvent(self, idlePeriod):
         """

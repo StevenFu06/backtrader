@@ -301,7 +301,7 @@ class IBABroker(with_metaclass(MetaIBABroker, BrokerBase)):
     def next(self):
         self.notifs.put(None)  # mark notificatino boundary
         if self.do_refresh:  # refresh ib_async
-            self.ib.conn.sleep(self.ib.p.refreshrate)  
+            self.ib.conn.sleep(self.ib.p.refreshrate)
 
     def getcash(self):
         self.cash = self.ib.getAccountValues("TotalCashBalance", self.p.currency)
@@ -366,7 +366,7 @@ class IBABroker(with_metaclass(MetaIBABroker, BrokerBase)):
     def _makeorder(
         self, action, owner, data, size, price=None, plimit=None, exectype=None, valid=None, tradeid=0, **kwargs
     ):
-        oid = self.ib.nextOrderId()
+        oid = self.ib.nextReqId()
         order = IBAOrder(
             action,
             owner=owner,
