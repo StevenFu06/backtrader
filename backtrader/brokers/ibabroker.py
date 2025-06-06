@@ -37,7 +37,7 @@ from backtrader.position import Position
 from backtrader.utils import AutoDict, AutoOrderedDict
 from backtrader.comminfo import CommInfoBase
 
-from ibastore import IBAStore
+from backtrader.stores.ibastore import IBAStore
 
 bytes = bstr  # py2/3 need for ibpy
 

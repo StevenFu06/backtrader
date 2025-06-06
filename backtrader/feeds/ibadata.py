@@ -28,7 +28,7 @@ from backtrader.feed import DataBase
 from backtrader import TimeFrame, date2num, num2date
 from backtrader.utils.py3 import integer_types, queue, string_types, with_metaclass
 from backtrader.metabase import MetaParams
-import ibastore
+import backtrader.stores.ibastore as ibastore
 from ib_async import Ticker
 
 
