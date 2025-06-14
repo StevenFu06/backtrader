@@ -32,6 +32,11 @@ except ImportError:
     pass  # The user may not have ibpy installed
 
 try:
+    from .ibabroker import IBABroker
+except ImportError:
+    pass  # The user may not have ib_async installed
+
+try:
     from .vcbroker import VCBroker
 except ImportError:
     pass  # The user may not have something installed

@@ -10,7 +10,6 @@ from backtrader.utils.py3 import with_metaclass, queue
 from backtrader.utils import AutoDict
 
 
-
 class MetaSingleton(MetaParams):
     """Metaclass to make a metaclassed class a singleton"""
 
@@ -26,6 +25,68 @@ class MetaSingleton(MetaParams):
 
 
 class IBAStore(with_metaclass(MetaSingleton, object)):
+    """Singleton class wrapping an ib_async instance.
+
+    The parameters can also be specified in the classes which use this store,
+    like ``IBAData`` and ``IBABroker``
+
+    Params:
+
+      - ``host`` (default:``127.0.0.1``): where IB TWS or IB Gateway are
+        actually running. And although this will usually be the localhost, it
+        must not be
+
+      - ``port`` (default: ``7496``): port to connect to. The demo system uses
+        ``7497``
+
+      - ``clientId`` (default: ``None``): which clientId to use to connect to
+        TWS.
+
+        ``None``: generates a random id between 1 and 65535
+        An ``integer``: will be passed as the value to use.
+
+      - ``notifyall`` (default: ``False``)
+
+        If ``False`` only ``error`` messages will be sent to the
+        ``notify_store`` methods of ``Cerebro`` and ``Strategy``.
+
+        If ``True``, each and every message received from TWS will be notified
+
+      - ``_debug`` (default: ``False``)
+
+        Print all messages received from TWS to standard output
+
+      - ``reconnect`` (default: ``3``)
+
+        Number of attempts to try to reconnect after the 1st connection attempt
+        fails
+
+        Set it to a ``-1`` value to keep on reconnecting forever
+
+      - ``timeout`` (default: ``3.0``)
+
+        Time in seconds between reconnection attemps
+
+      - ``timeoffset`` (default: ``True``)
+
+        If True, the time obtained from ``reqCurrentTime`` (IB Server time)
+        will be used to calculate the offset to localtime and this offset will
+        be used for the price notifications (tickPrice events, for example for
+        CASH markets) to modify the locally calculated timestamp.
+
+        The time offset will propagate to other parts of the ``backtrader``
+        ecosystem like the **resampling** to align resampling timestamps using
+        the calculated offset.
+
+      - ``timerefresh`` (default: ``60.0``)
+
+        Time in seconds: how often the time offset has to be refreshed
+
+      - ``indcash`` (default: ``True``)
+
+        Manage IND codes as if they were cash for price retrieval
+    """
+
     # The _durations are meant to calculate the needed historical data to
     # perform backfilling at the start of a connetion or a connection is lost.
     # Using a timedelta as a key allows to quickly find out which bar size
@@ -263,20 +324,200 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
                 ("15 mins", "20 mins", "30 mins", "1 hour", "2 hours", "3 hours", "4 hours", "8 hours", "1 day", "1 W"),
             ),
             # 1 months
-            ("1 M", ("30 mins", "1 hour", "2 hours", "3 hours", "4 hours", "8 hours", "1 day", "1 W", "1 M")),
+            (
+                "1 M",
+                (
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                    "2 hours",
+                    "3 hours",
+                    "4 hours",
+                    "8 hours",
+                    "1 day",
+                    "1 W",
+                    "1 M",
+                ),
+            ),
             # 2+ months
-            ("2 M", ("1 day", "1 W", "1 M")),
-            ("3 M", ("1 day", "1 W", "1 M")),
-            ("4 M", ("1 day", "1 W", "1 M")),
-            ("5 M", ("1 day", "1 W", "1 M")),
-            ("6 M", ("1 day", "1 W", "1 M")),
-            ("7 M", ("1 day", "1 W", "1 M")),
-            ("8 M", ("1 day", "1 W", "1 M")),
-            ("9 M", ("1 day", "1 W", "1 M")),
-            ("10 M", ("1 day", "1 W", "1 M")),
-            ("11 M", ("1 day", "1 W", "1 M")),
+            (
+                "2 M",
+                (
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                    "2 hours",
+                    "3 hours",
+                    "4 hours",
+                    "8 hours",
+                    "1 day",
+                    "1 W",
+                    "1 M",
+                ),
+            ),
+            (
+                "3 M",
+                (
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                    "2 hours",
+                    "3 hours",
+                    "4 hours",
+                    "8 hours",
+                    "1 day",
+                    "1 W",
+                    "1 M",
+                ),
+            ),
+            (
+                "4 M",
+                (
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                    "2 hours",
+                    "3 hours",
+                    "4 hours",
+                    "8 hours",
+                    "1 day",
+                    "1 W",
+                    "1 M",
+                ),
+            ),
+            (
+                "5 M",
+                (
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                    "2 hours",
+                    "3 hours",
+                    "4 hours",
+                    "8 hours",
+                    "1 day",
+                    "1 W",
+                    "1 M",
+                ),
+            ),
+            (
+                "6 M",
+                (
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                    "2 hours",
+                    "3 hours",
+                    "4 hours",
+                    "8 hours",
+                    "1 day",
+                    "1 W",
+                    "1 M",
+                ),
+            ),
+            (
+                "7 M",
+                (
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                    "2 hours",
+                    "3 hours",
+                    "4 hours",
+                    "8 hours",
+                    "1 day",
+                    "1 W",
+                    "1 M",
+                ),
+            ),
+            (
+                "8 M",
+                (
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                    "2 hours",
+                    "3 hours",
+                    "4 hours",
+                    "8 hours",
+                    "1 day",
+                    "1 W",
+                    "1 M",
+                ),
+            ),
+            (
+                "9 M",
+                (
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                    "2 hours",
+                    "3 hours",
+                    "4 hours",
+                    "8 hours",
+                    "1 day",
+                    "1 W",
+                    "1 M",
+                ),
+            ),
+            (
+                "10 M",
+                (
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                    "2 hours",
+                    "3 hours",
+                    "4 hours",
+                    "8 hours",
+                    "1 day",
+                    "1 W",
+                    "1 M",
+                ),
+            ),
+            (
+                "11 M",
+                (
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                    "2 hours",
+                    "3 hours",
+                    "4 hours",
+                    "8 hours",
+                    "1 day",
+                    "1 W",
+                    "1 M",
+                ),
+            ),
             # 1+ years
-            ("1 Y", ("1 day", "1 W", "1 M")),
+            (
+                "1 Y",
+                (
+                    "15 mins",
+                    "20 mins",
+                    "30 mins",
+                    "1 hour",
+                    "2 hours",
+                    "3 hours",
+                    "4 hours",
+                    "8 hours",
+                    "1 day",
+                    "1 W",
+                    "1 M",
+                ),
+            ),
         ]
     )
 
@@ -373,19 +614,20 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         self.datas = dict()  # data stored in dict instead of queue and get queue
         self._env = None  # reference to cerebro for general notifications
 
-        # Create connection object
-        self.conn = IB().connect(host=self.p.host, port=self.p.port, clientId=self.p.clientId)
-        # Register them to async
-        for event in self.events:
-            getattr(self.conn, event).connect(getattr(self, event))
-            if self.p.notifyall or self.p._debug:
-                getattr(self.conn, event).connect(self.watcher)
-
         # Use the provided clientId or a random one
         if self.p.clientId is None:
             self.clientId = random.randint(1, pow(2, 16) - 1)
         else:
             self.clientId = self.p.clientId
+
+        # Create connection object
+
+        self.conn = IB().connect(host=self.p.host, port=self.p.port, clientId=self.clientId)
+        # Register them to async
+        for event in self.events:
+            getattr(self.conn, event).connect(getattr(self, event))
+            if self.p.notifyall or self.p._debug:
+                getattr(self.conn, event).connect(self.watcher)
 
         # This utility key function transforms a barsize into a:
         #   (Timeframe, Compression) tuple which can be sorted
@@ -563,6 +805,18 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
             return copy(position)
         return position
 
+    def getAssetPortfolio(self, contract, clone=False):
+        """Get position using get portfolio instead. Gives more data."""
+
+        portfolio = None
+        for pos in self.conn.portfolio():
+            if contract.conId == pos.contract.conId:
+                portfolio = pos
+
+        if clone:
+            return copy(portfolio)
+        return portfolio
+
     def nextReqId(self):
         """Mimic old nextValidId + itertools.count combo"""
         # Dont actually increment it because then reqID will be incremented AGAIN when
@@ -679,6 +933,7 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
             useRTH=useRTH,
             formatDate=2,
         )
+        self.conn.sleep(self.p.refreshrate)
         return reqId, ticker
 
     def getFeed(self, reqId, contract):
@@ -754,16 +1009,7 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         # Microseconds or ticks
         return None
 
-    def reqHistoricalDataEx(
-        self,
-        contract,
-        enddate,
-        begindate,
-        timeframe,
-        compression,
-        what=None,
-        useRTH=False
-    ):
+    def reqHistoricalDataEx(self, contract, enddate, begindate, timeframe, compression, what=None, useRTH=False):
         """
         Extension of the raw reqHistoricalData proxy, which takes two dates
         rather than a duration, barsize and date
@@ -807,7 +1053,6 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         durations = self.getdurations(timeframe, compression)
         if not durations:  # return a queue and put a None in it
             return None, None
-
         # Get the best possible duration to reduce number of requests
         duration = None
         for dur in durations:
@@ -983,7 +1228,7 @@ class IBAStore(with_metaclass(MetaSingleton, object)):
         """
         if not self.p.notifyall:
             msg = (reqId, errorCode, errorString, contract)
-            print(f'Error occured: {msg}')
+            print(f"Error occured: {msg}")
             self.notifs.put((msg, (), {}))
 
         # Manage those events which have to do with connection

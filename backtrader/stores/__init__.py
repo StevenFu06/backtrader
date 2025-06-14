@@ -30,6 +30,11 @@ except ImportError:
     pass  # The user may not have ibpy installed
 
 try:
+    from .ibastore import IBAStore
+except ImportError:
+    pass  # The user may not have ib_async installed
+
+try:
     from .vcstore import VCStore
 except ImportError:
     pass  # The user may not have a module installed

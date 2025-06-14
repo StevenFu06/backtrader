@@ -313,6 +313,9 @@ class IBABroker(with_metaclass(MetaIBABroker, BrokerBase)):
 
     def getposition(self, data, clone=True):
         return self.ib.getposition(data.tradecontract, clone=clone)
+    
+    def getportfolio(self, data, clone=True):
+        return self.ib.getAssetPortfolio(data.tradecontract, clone=True)
 
     def cancel(self, order):
         try:

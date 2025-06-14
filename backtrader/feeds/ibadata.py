@@ -257,7 +257,7 @@ class IBAData(with_metaclass(MetaIBData, DataBase)):
 
       - ``AAPL-STK-SMART-USD`` would be the full specification for dataname
 
-        Or else: ``IBData`` as ``IBData(dataname='AAPL', currency='USD')``
+        Or else: ``IBAData`` as ``IBAData(dataname='AAPL', currency='USD')``
         which uses the default values (``STK`` and ``SMART``) and overrides
         the currency to be ``USD``
     """
@@ -527,7 +527,7 @@ class IBAData(with_metaclass(MetaIBData, DataBase)):
         return bool(self._storedmsg or self.livefeed)
 
     def _load(self):
-        if self.do_refresh:  # refresh ib_async
+        if self.do_refresh and self._state != self._ST_HISTORBACK:  # refresh ib_async
             self.ib.conn.sleep(self.ib.p.refreshrate)
 
         if self.contract is None or self._state == self._ST_OVER:
@@ -679,7 +679,6 @@ class IBAData(with_metaclass(MetaIBData, DataBase)):
 
                 if msg and msg.date is not None:
                     if self._load_rtbar(msg, hist=True):
-
                         return True  # loading worked
                     # the date is from overlapping historical request
                     continue
@@ -731,7 +730,7 @@ class IBAData(with_metaclass(MetaIBData, DataBase)):
                 what=self.p.what,
                 useRTH=self.p.useRTH,
             )
-            self.histfee.set_data(reqId, ticker)
+            self.histfeed.set_data(reqId, ticker)
 
             self._state = self._ST_HISTORBACK
             return True  # continue before
